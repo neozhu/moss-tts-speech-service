@@ -1,0 +1,26 @@
+services:
+  moss-tts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PRELOAD_MODELS: "0"
+    image: ghcr.io/neozhu/moss-tts-speech-service:latest
+    container_name: moss-tts-speech-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MOSS_TTS_DEFAULT_VOICE=Junhao
+      - MOSS_TTS_CPU_THREADS=4
+      - MOSS_TTS_SAMPLE_MODE=fixed
+      - MOSS_TTS_CACHE_ENABLED=true
+      - MOSS_TTS_CACHE_MAX_MEMORY_ITEMS=256
+      - MOSS_TTS_CACHE_MAX_DISK_MB=512
+      - MOSS_TTS_API_KEY=sk-moss-tts
+      # 国内环境可取消注释使用 HuggingFace 镜像加速首次模型下载
+      # - HF_ENDPOINT=https://hf-mirror.com
+    volumes:
+      - ./models:/app/models
+      - ./voices:/app/voices
+      - ./.cache/tts:/app/.cache/tts

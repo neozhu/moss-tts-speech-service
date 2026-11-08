@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# MOSS-TTS runtime artifacts & caches
+models/
+.cache/
+voices/*
+!voices/.gitkeep
