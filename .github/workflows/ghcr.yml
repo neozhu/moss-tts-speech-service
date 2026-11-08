@@ -10,11 +10,11 @@ on:
       preload_models:
         description: "Bake MOSS-TTS-Nano ONNX weights into the Docker image"
         required: false
-        default: "0"
+        default: "1"
         type: choice
         options:
-          - "0"
           - "1"
+          - "0"
 
 env:
   REGISTRY: ghcr.io
@@ -45,10 +45,10 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           build-args: |
-            PRELOAD_MODELS=${{ github.event.inputs.preload_models || '0' }}
+            PRELOAD_MODELS=${{ github.event.inputs.preload_models || '1' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

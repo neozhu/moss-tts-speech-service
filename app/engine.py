@@ -25,6 +25,26 @@ logger = logging.getLogger(__name__)
 
 TTS_REPO_ID = "OpenMOSS-Team/MOSS-TTS-Nano-100M-ONNX"
 CODEC_REPO_ID = "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX"
+BAKED_MODEL_DIR = Path("/opt/moss-models")
+
+REQUIRED_TTS_FILES = (
+    "browser_poc_manifest.json",
+    "tts_browser_onnx_meta.json",
+    "tokenizer.model",
+    "moss_tts_prefill.onnx",
+    "moss_tts_decode_step.onnx",
+    "moss_tts_local_decoder.onnx",
+    "moss_tts_global_shared.data",
+    "moss_tts_local_shared.data",
+)
+REQUIRED_CODEC_FILES = (
+    "codec_browser_onnx_meta.json",
+    "moss_audio_tokenizer_encode.onnx",
+    "moss_audio_tokenizer_encode.data",
+    "moss_audio_tokenizer_decode_full.onnx",
+    "moss_audio_tokenizer_decode_step.onnx",
+    "moss_audio_tokenizer_decode_shared.data",
+)
 
 SENTENCE_END_PUNCT = set(".!?。！？；;")
 CLAUSE_SPLIT_PUNCT = set(",，、；;：:")
@@ -44,32 +64,48 @@ OPENAI_VOICE_MAP: dict[str, str] = {
 }
 
 
-def ensure_onnx_models(model_dir: Path) -> Path:
-    """Ensure MOSS-TTS-Nano ONNX and Audio-Tokenizer ONNX models are downloaded."""
-    resolved = model_dir.expanduser().resolve()
-    manifest_candidates = (
-        resolved / "browser_poc_manifest.json",
-        resolved / "MOSS-TTS-Nano-100M-ONNX" / "browser_poc_manifest.json",
+def _has_all_files(directory: Path, required_files: Sequence[str]) -> bool:
+    return directory.is_dir() and all(
+        (directory / name).is_file() and (directory / name).stat().st_size > 0
+        for name in required_files
     )
-    for candidate in manifest_candidates:
-        if candidate.is_file():
-            return candidate
+
+
+def _find_complete_manifest(base_dir: Path) -> Path | None:
+    tts_dir = base_dir / "MOSS-TTS-Nano-100M-ONNX"
+    codec_dir = base_dir / "MOSS-Audio-Tokenizer-Nano-ONNX"
+    if _has_all_files(tts_dir, REQUIRED_TTS_FILES) and _has_all_files(codec_dir, REQUIRED_CODEC_FILES):
+        return tts_dir / "browser_poc_manifest.json"
+    return None
+
+
+def ensure_onnx_models(model_dir: Path) -> Path:
+    """Ensure both MOSS-TTS-Nano ONNX and Audio-Tokenizer ONNX models are completely downloaded."""
+    resolved = model_dir.expanduser().resolve()
+    for base_dir in (resolved, BAKED_MODEL_DIR):
+        manifest = _find_complete_manifest(base_dir)
+        if manifest is not None:
+            return manifest
 
     tts_dir = resolved / "MOSS-TTS-Nano-100M-ONNX"
     codec_dir = resolved / "MOSS-Audio-Tokenizer-Nano-ONNX"
-    logger.info("Downloading MOSS-TTS-Nano ONNX models into %s ...", resolved)
     tts_dir.mkdir(parents=True, exist_ok=True)
     codec_dir.mkdir(parents=True, exist_ok=True)
 
-    _download_with_mirror_fallback(TTS_REPO_ID, tts_dir, ["*.onnx", "*.data", "*.json", "tokenizer.model"])
-    _download_with_mirror_fallback(CODEC_REPO_ID, codec_dir, ["*.onnx", "*.data", "*.json"])
-    _promote_nested_files(tts_dir, ("browser_poc_manifest.json", "tts_browser_onnx_meta.json", "tokenizer.model"))
-    _promote_nested_files(codec_dir, ("codec_browser_onnx_meta.json",))
+    if not _has_all_files(tts_dir, REQUIRED_TTS_FILES):
+        logger.info("Downloading %s into %s ...", TTS_REPO_ID, tts_dir)
+        _download_with_mirror_fallback(TTS_REPO_ID, tts_dir, ["*.onnx", "*.data", "*.json", "tokenizer.model"])
+        _promote_nested_files(tts_dir, REQUIRED_TTS_FILES)
 
-    for candidate in manifest_candidates:
-        if candidate.is_file():
-            return candidate
-    raise FileNotFoundError(f"browser_poc_manifest.json not found under {resolved} after download.")
+    if not _has_all_files(codec_dir, REQUIRED_CODEC_FILES):
+        logger.info("Downloading %s into %s ...", CODEC_REPO_ID, codec_dir)
+        _download_with_mirror_fallback(CODEC_REPO_ID, codec_dir, ["*.onnx", "*.data", "*.json"])
+        _promote_nested_files(codec_dir, REQUIRED_CODEC_FILES)
+
+    manifest = _find_complete_manifest(resolved)
+    if manifest is not None:
+        return manifest
+    raise FileNotFoundError(f"ONNX model bundle incomplete under {resolved} after download.")
 
 
 def _download_with_mirror_fallback(repo_id: str, local_dir: Path, allow_patterns: list[str]) -> None:

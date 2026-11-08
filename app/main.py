@@ -22,6 +22,8 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     level=logging.INFO,
 )
+for _noisy_logger in ("httpx", "httpx2", "httpcore", "httpcore2", "huggingface_hub"):
+    logging.getLogger(_noisy_logger).setLevel(logging.ERROR)
 logger = logging.getLogger("moss_tts_service")
 
 
